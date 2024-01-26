@@ -9,8 +9,9 @@ class PPG(PPO):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.n_aux_epochs = 6
-        self.aux_batch_size = 8
+        self.aux_batch_size = 32
         self.beta_clone = 1.0
+        # self._set_paper_parameters()
     
     def _set_paper_parameters(self):
         if self.env.num_envs != 64:
@@ -27,7 +28,7 @@ class PPG(PPO):
         self.n_aux_epochs = 6
         self.gamma = 0.999
         self.gae_lambda = 0.95
-        self.clip_range = 0.2
+        # self.clip_range = 0.2
         self.clip_range_vf = None
         self.ent_coef = 0.01
         self.vf_coef = 0.5

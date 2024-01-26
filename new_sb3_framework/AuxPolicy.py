@@ -9,6 +9,7 @@ class AuxActorCriticPolicy(ActorCriticPolicy):
         aux_lr_schedule = 5e-4
         super(AuxActorCriticPolicy, self).__init__(*args, **kwargs)
         lr_schedule = kwargs.get('lr_schedule', args[2])
+        self.share_features_extractor = False
         self._build(lr_schedule, aux_lr_schedule)
 
     # Paper init
