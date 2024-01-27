@@ -5,6 +5,7 @@ import numpy as np
 import torch as th
 from gymnasium import spaces
 from torch.nn import functional as F
+from torch import distributions as td
 
 from stable_baselines3.common.buffers import RolloutBuffer
 from stable_baselines3.common.on_policy_algorithm import OnPolicyAlgorithm
@@ -267,27 +268,33 @@ class SUPERPPO(OnPolicyAlgorithm):
                         teacher_actions_dist = self.teacher_model.policy.get_distribution(rollout_data.observations)
                         teacher_logits = teacher_actions_dist.distribution.logits
                     else:
-                        teacher_logits,_,_ = self.teacher_model.policy(rollout_data.observations)
+                        teacher_actions_dist = self.teacher_model.policy.get_distribution(rollout_data.observations)
+                        teacher_logits = teacher_actions_dist.distribution
                 
                 # student's action
                 if isinstance(self.action_space, spaces.Discrete):
                     student_actions_dist = self.policy.get_distribution(rollout_data.observations)
                     student_logits = student_actions_dist.distribution.logits
                 else:
-                    student_logits = rollout_data.actions
+                    student_actions_dist = self.policy.get_distribution(rollout_data.observations)
+                    student_logits = student_actions_dist.distribution
 
                 # imitation loss
                 # imitation_loss = F.mse_loss(student_logits, teacher_logits) 
 
-                #Soften the student logits by applying softmax first and log() second
-                T = 2
-                soft_targets = F.softmax(teacher_logits / T, dim=-1)
-                soft_prob = F.log_softmax(student_logits / T, dim=-1)
+                if isinstance(self.action_space, spaces.Discrete):
+                    #Soften the student logits by applying softmax first and log() second
+                    T = 2
+                    soft_targets = F.softmax(teacher_logits / T, dim=-1)
+                    soft_prob = F.log_softmax(student_logits / T, dim=-1)
 
-                # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
-                soft_targets_loss = -th.sum(soft_targets * soft_prob) / soft_prob.size()[0] * (T**2)
+                    # Calculate the soft targets loss. Scaled by T**2 as suggested by the authors of the paper "Distilling the knowledge in a neural network"
+                    targets_loss = -th.sum(soft_targets * soft_prob) / soft_prob.size()[0] * (T**2)
+                else:
+                    targets_loss = td.kl_divergence(teacher_logits, student_logits).mean()
 
-                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + soft_targets_loss
+
+                loss = policy_loss + self.ent_coef * entropy_loss + self.vf_coef * value_loss + targets_loss
 
                 # Calculate approximate form of reverse KL Divergence for early stopping
                 # see issue #417: https://github.com/DLR-RM/stable-baselines3/issues/417

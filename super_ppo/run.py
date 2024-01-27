@@ -5,31 +5,39 @@ from stable_baselines3.common.vec_env import SubprocVecEnv, VecMonitor
 from stable_baselines3.common.env_util import make_vec_env
 import pandas as pd
 import numpy as np
+from stable_baselines3.common.evaluation import evaluate_policy
 
 if __name__ == '__main__':
     # Create environment
     env_id = "BipedalWalker-v3"
-    total_timesteps = int(5e5)
-    env = make_vec_env(env_id=env_id, n_envs=8, vec_env_cls=SubprocVecEnv, seed=2024 )
+    total_timesteps = int(7e5)
+    seed = 2024
+
+    env = make_vec_env(env_id=env_id, n_envs=8, vec_env_cls=SubprocVecEnv, seed=seed )
     env = VecMonitor(env, filename="teacher")
 
     # Instantiate the agent
-    model = PPO("MlpPolicy", env, verbose=1, seed=123)
+    model = PPO("MlpPolicy", env, verbose=1, seed=seed)
     # Train the agent and display a progress bar
     model.learn(total_timesteps=total_timesteps, progress_bar=True)
     model.save("teacher-model")
     del model
 
     # Create environment
-    env = make_vec_env(env_id=env_id, n_envs=8, vec_env_cls=SubprocVecEnv, seed=2024 )
+    env = make_vec_env(env_id=env_id, n_envs=8, vec_env_cls=SubprocVecEnv, seed=seed )
     teacher_model = PPO.load("teacher-model.zip", env = env)
     env = VecMonitor(env, filename="student")
 
     # Instantiate the agent
-    model = SUPERPPO("MlpPolicy", env, verbose=1, seed=123, teacher_model=teacher_model)
+    student_model = SUPERPPO("MlpPolicy", env, verbose=1, seed=seed, teacher_model=teacher_model)
     # Train the agent and display a progress bar
-    model.learn(total_timesteps=total_timesteps, progress_bar=True)
-    model.save("student-model")
+    student_model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    # model.save("student-model")
+
+    mean_reward, std_reward = evaluate_policy(teacher_model, env, n_eval_episodes=10)
+    print(f"Teacher's Mean reward = {mean_reward} +/- {std_reward}")
+    mean_reward, std_reward = evaluate_policy(student_model, env, n_eval_episodes=10)
+    print(f"Student's Mean reward = {mean_reward} +/- {std_reward}")
 
     filenames = ['teacher.monitor.csv', 'student.monitor.csv']
 
